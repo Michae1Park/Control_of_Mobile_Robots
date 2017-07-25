@@ -78,29 +78,53 @@ classdef FollowWall < simiam.controller.Controller
             
             % 1. Select p_2 and p_1, then compute u_fw_t
             if(strcmp(inputs.direction,'right'))
+                [val, idx] = sort(ir_distances(3:5));
                 % Pick two of the right sensors based on ir_distances
-                p_1 = ir_distances_wf(:,1);
-                p_2 = ir_distances_wf(:,1);
+                p_1 = ir_distances_wf(:,idx(1)+2);
+                p_2 = ir_distances_wf(:,idx(2)+2);
             else
-                % Pick two of the left sensors based on ir_distances
-                p_1 = ir_distances_wf(:,5);
-                p_2 = ir_distances_wf(:,5);
+                [val, idx] = sort(ir_distances(1:3));
+                p_1 = ir_distances_wf(:,min(idx(1), idx(2)));
+                p_2 = ir_distances_wf(:,max(idx(1), idx(2))); %Why min max? =>otherwise the car might turn the opposite direction cuz we're always doing p2 - p1
             end
-            
-            u_fw_t = [0;0];
+            u_fw_t = p_2 - p_1; %2x1 vector
 
             % 2. Compute u_a, u_p, and u_fw_tp to compute u_fw_p
             
-            u_fw_tp = [0;0];
-            u_a = [0;0];
-            u_p = [0;0];
+            u_fw_tp = u_fw_t/norm(u_fw_t);
+            u_a = p_1;
+            u_p = [x;y];
             
-            u_fw_p = [0;0];
+            u_fw_p = (u_a - u_p) - ((u_a-u_p)'*u_fw_tp)*u_fw_tp; %Why (u_a-u_p)' => scalar projection
             
             % 3. Combine u_fw_tp and u_fw_pp into u_fw;
-            u_fw_pp = [0;0];
-            u_fw = u_fw_tp;
+            u_fw_pp = u_fw_p - d_fw*(u_fw_p/norm(u_fw_p));
+  
+            %Cannot turn properly at the corners of the walls. Thus need
+            %different scales factors for different wall surfaces
+       
+            alpha = 2.5; %can complete one round
+            beta = 1;
+            u_fw = u_fw_tp*alpha + u_fw_pp*beta;
+            fprintf("va: %f, %f", val(1), val(2));
             
+            %dynamic distancing
+%             if (val(1) < 0.1)
+%                 fprintf("too close!\n");
+%                 alpha = 1;
+%                 beta = -10;
+%             elseif (val(2) > 0.22 || val(1) > 0.22)
+%                 fprintf("too far!\n");
+%                 alpha = 1;
+%                 beta =  2;
+%             else
+%                 fprintf("approrpiate distance\n");
+%                 alpha = 1;
+%                 beta = 1;
+%             end
+%             u_fw = u_fw_tp*alpha + u_fw_pp*beta;
+           
+
             %% END CODE BLOCK %%
             
             % Compute the heading and error for the PID controller
