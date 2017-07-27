@@ -133,9 +133,9 @@ classdef QBSupervisor < simiam.controller.Supervisor
             inputs.y_g = obj.goal(2);
             
             %% START CODE BLOCK %%
-            
+            %State_Machine
             ir_distances = obj.robot.get_ir_distances();
-            
+           
             if (obj.check_event('at_goal'))
                 if (~obj.is_in_state('stop'))
                     [x,y,theta] = obj.state_estimate.unpack();
@@ -143,7 +143,26 @@ classdef QBSupervisor < simiam.controller.Supervisor
                 end
                 obj.switch_to_state('stop');
             end
+
+            if obj.check_event('unsafe') && ~obj.is_in_state('follow_wall') 
+                obj.switch_to_state('avoid_obstacles');
+            end
             
+            if obj.check_event('at_obstacle') && obj.is_in_state('go_to_goal') 
+                if sliding_left(obj)
+                    inputs.direction = 'left';
+                end
+                if sliding_right(obj)
+                    inputs.direction = 'right';
+                end
+                set_progress_point(obj);
+                obj.switch_to_state('follow_wall');                    
+            end
+            
+            if obj.is_in_state('follow_wall') && obj.check_event('progress_made') && ~obj.check_event('at_obstacle')
+                obj.switch_to_state('go_to_goal');
+            end
+
             %% END CODE BLOCK %%
             
             inputs.direction = obj.fw_direction;
@@ -176,7 +195,7 @@ classdef QBSupervisor < simiam.controller.Supervisor
             u_fw = obj.controllers{7}.u_fw;
                         
             %% START CODE BLOCK %%
-            sigma = [0;0];
+            sigma = pinv([u_gtg u_ao])*u_fw;
             %% END CODE BLOCK %%
 
             rc = false;
@@ -199,7 +218,7 @@ classdef QBSupervisor < simiam.controller.Supervisor
             u_fw = obj.controllers{7}.u_fw;
             
             %% START CODE BLOCK
-            sigma = [0;0];
+            sigma = pinv([u_gtg u_ao])*u_fw;
             %% END CODE BLOCK
             
             rc = false;
@@ -216,13 +235,11 @@ classdef QBSupervisor < simiam.controller.Supervisor
             rc = false;
             
             %% START CODE BLOCK %%
-            
-            if (1+1==2)
+            epsilon = 0.1;
+            if (norm([x-obj.goal(1);y-obj.goal(2)]) < (obj.d_prog - epsilon))
                 rc = true;
             end
-            
-            %% END CODE BLOCK %%
-            
+            %% END CODE BLOCK %%            
         end
 
         function rc = at_goal(obj, state, robot)
